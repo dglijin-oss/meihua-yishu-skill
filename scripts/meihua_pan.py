@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-梅花易数排盘工具 v1.0.0
+梅花易数排盘工具 v2.0.0
 天工长老开发
 
 功能：梅花易数起卦、互卦、变卦、体用分析、自动化断卦
+v2.0.0 新增：外应断卦、卦例库、断语细化、吉凶评分
 """
 
 import argparse
@@ -168,7 +169,7 @@ class MeiHuaPan:
     
     @classmethod
     def get_duan_yu(cls, ti_yong: Dict, ben_gua: str, hu_gua: str, bian_gua: str) -> List[str]:
-        """生成断语"""
+        """生成断语（v1.0.0）"""
         duan_yu = []
         
         # 体用关系断语
@@ -201,6 +202,204 @@ class MeiHuaPan:
             duan_yu.append("卦象平稳，顺势而为")
         
         return duan_yu
+    
+    @classmethod
+    def get_wai_ying_v3(cls, ben_gua: str, ti_yong: Dict) -> Dict:
+        """
+        v2.0.0 外应断卦
+        
+        外应：起卦时的外在征应（声音、颜色、人物、动物等）
+        此处为简化版，根据卦象推断可能的外应
+        
+        参数：
+            ben_gua: 本卦名
+            ti_yong: 体用信息
+        
+        返回：
+            外应信息
+        """
+        wai_ying = {
+            '外应类型': [],
+            '外应详解': [],
+            '外应吉凶': '中'
+        }
+        
+        # 根据体卦推断外应
+        ti_gua = ti_yong.get('体卦', '')
+        
+        ti_gua_wai_ying = {
+            '乾': {'象': '金玉之声', '色': '白', '物': '圆形物', '事': '贵人'},
+            '兑': {'象': '口舌之声', '色': '白', '物': '金属物', '事': '少女'},
+            '离': {'象': '火光之色', '色': '红', '物': '文书', '事': '中女'},
+            '震': {'象': '雷动之声', '色': '青', '物': '木器', '事': '长男'},
+            '巽': {'象': '风行之声', '色': '绿', '物': '绳索', '事': '长女'},
+            '坎': {'象': '水流之声', '色': '黑', '物': '液体', '事': '中男'},
+            '艮': {'象': '山止之象', '色': '黄', '物': '土石', '事': '少男'},
+            '坤': {'象': '地载之象', '色': '黑', '物': '方形物', '事': '老母'},
+        }
+        
+        if ti_gua in ti_gua_wai_ying:
+            ying = ti_gua_wai_ying[ti_gua]
+            wai_ying['外应类型'].append(f"体卦{ti_gua}外应：{ying['象']}")
+            wai_ying['外应详解'].append(f"• 颜色：{ying['色']}")
+            wai_ying['外应详解'].append(f"• 物品：{ying['物']}")
+            wai_ying['外应详解'].append(f"• 人物：{ying['事']}")
+        
+        # 根据卦名推断外应
+        if '乾' in ben_gua:
+            wai_ying['外应类型'].append("乾卦外应：见贵人、闻金声")
+        elif '坤' in ben_gua:
+            wai_ying['外应类型'].append("坤卦外应：见老妇、得布帛")
+        elif '震' in ben_gua:
+            wai_ying['外应类型'].append("震卦外应：闻雷声、见木器")
+        elif '巽' in ben_gua:
+            wai_ying['外应类型'].append("巽卦外应：闻风声、得绳索")
+        elif '坎' in ben_gua:
+            wai_ying['外应类型'].append("坎卦外应：闻水声、见液体")
+        elif '离' in ben_gua:
+            wai_ying['外应类型'].append("离卦外应：见火光、得文书")
+        elif '艮' in ben_gua:
+            wai_ying['外应类型'].append("艮卦外应：见山石、得土石")
+        elif '兑' in ben_gua:
+            wai_ying['外应类型'].append("兑卦外应：闻歌声、见少女")
+        
+        # 外应吉凶
+        if ti_yong['吉凶'] in ['大吉', '吉']:
+            wai_ying['外应吉凶'] = '吉'
+        elif ti_yong['吉凶'] == '凶':
+            wai_ying['外应吉凶'] = '凶'
+        
+        return wai_ying
+    
+    @classmethod
+    def get_gua_li_v3(cls, ben_gua: str, hu_gua: str, bian_gua: str) -> Dict:
+        """
+        v2.0.0 卦例库匹配
+        
+        根据卦名匹配经典卦例
+        
+        参数：
+            ben_gua: 本卦
+            hu_gua: 互卦
+            bian_gua: 变卦
+        
+        返回：
+            卦例信息
+        """
+        gua_li = {
+            '卦例': None,
+            '典故': None,
+            '启示': None
+        }
+        
+        # 经典卦例库
+        gua_li_db = {
+            '地天泰': {
+                '卦例': '泰卦三阳开泰',
+                '典故': '周文王演易，泰卦亨通',
+                '启示': '小往大来，吉亨，宜把握良机'
+            },
+            '天地否': {
+                '卦例': '否卦闭塞不通',
+                '典故': '孔子厄于陈蔡，得否卦',
+                '启示': '大往小来，宜守不宜攻'
+            },
+            '水火既济': {
+                '卦例': '既济事已成',
+                '典故': '诸葛亮借东风，事已成',
+                '启示': '初吉终乱，宜守成'
+            },
+            '火水未济': {
+                '卦例': '未济事未成',
+                '典故': '姜子牙钓鱼，待时而动',
+                '启示': '虽不当位，刚柔应也，需努力'
+            },
+            '乾为天': {
+                '卦例': '乾卦六龙御天',
+                '典故': '尧舜禅让，天道酬勤',
+                '启示': '天行健，君子以自强不息'
+            },
+            '坤为地': {
+                '卦例': '坤卦厚德载物',
+                '典故': '文王演易，地道光也',
+                '启示': '地势坤，君子以厚德载物'
+            },
+            '水雷屯': {
+                '卦例': '屯卦万事开头难',
+                '典故': '刘备起兵，艰难创业',
+                '启示': '刚柔始交而难生，宜守'
+            },
+            '山水蒙': {
+                '卦例': '蒙卦启蒙教育',
+                '典故': '孔子杏坛讲学',
+                '启示': '匪我求童蒙，童蒙求我'
+            },
+            '泽火革': {
+                '卦例': '革卦改革变革',
+                '典故': '商鞅变法',
+                '启示': '天地革而四时成，适时变革'
+            },
+            '火风鼎': {
+                '卦例': '鼎卦鼎新革故',
+                '典故': '伊尹辅商汤',
+                '启示': '君子以正位凝命'
+            },
+        }
+        
+        if ben_gua in gua_li_db:
+            gua_li['卦例'] = gua_li_db[ben_gua]['卦例']
+            gua_li['典故'] = gua_li_db[ben_gua]['典故']
+            gua_li['启示'] = gua_li_db[ben_gua]['启示']
+        
+        return gua_li
+    
+    @classmethod
+    def get_ji_xiong_ping_fen_v3(cls, ti_yong: Dict, ben_gua: str, hu_gua: str, bian_gua: str) -> int:
+        """
+        v2.0.0 吉凶量化评分
+        
+        参数：
+            ti_yong: 体用信息
+            ben_gua: 本卦
+            hu_gua: 互卦
+            bian_gua: 变卦
+        
+        返回：
+            吉凶评分（0-100）
+        """
+        score = 50  # 基础分
+        
+        # 体用关系评分
+        if ti_yong['吉凶'] == '大吉':
+            score += 30
+        elif ti_yong['吉凶'] == '吉':
+            score += 20
+        elif ti_yong['吉凶'] == '凶':
+            score -= 20
+        
+        # 卦名评分
+        ji_gua = ['泰', '大有', '谦', '豫', '随', '蛊', '临', '观', '贲', '复', '无妄', '大畜', '颐', '大过', '坎', '离', '咸', '恒', '遁', '大壮', '晋', '明夷', '家人', '睽', '蹇', '解', '损', '益', '夬', '姤', '萃', '升', '困', '井', '革', '鼎', '震', '艮', '渐', '归妹', '丰', '旅', '巽', '兑', '涣', '节', '中孚', '小过', '既济']
+        xiong_gua = ['否', '屯', '蒙', '需', '讼', '师', '比', '小畜', '履', '同人', '姤', '萃', '升', '困', '井', '革', '鼎', '震', '艮', '渐', '归妹', '丰', '旅', '巽', '兑', '涣', '节', '中孚', '小过', '未济']
+        
+        for gua in ji_gua:
+            if gua in ben_gua:
+                score += 10
+                break
+        
+        for gua in xiong_gua:
+            if gua in ben_gua:
+                score -= 10
+                break
+        
+        # 变卦评分
+        if ben_gua != bian_gua:
+            # 有变卦，看变化方向
+            if '泰' in bian_gua or '大有' in bian_gua:
+                score += 15
+            elif '否' in bian_gua or '未济' in bian_gua:
+                score -= 15
+        
+        return max(0, min(100, score))
 
 
 def meihua_pan(
@@ -280,8 +479,17 @@ def meihua_pan(
     # 体用
     ti_yong = MeiHuaPan.get_ti_yong(shang_gua, xia_gua, dong_yao)
     
-    # 断语
+    # 断语（v1.0.0）
     duan_yu = MeiHuaPan.get_duan_yu(ti_yong, ben_gua, hu_gua, bian_gua)
+    
+    # v2.0.0 外应断卦
+    wai_ying = MeiHuaPan.get_wai_ying_v3(ben_gua, ti_yong)
+    
+    # v2.0.0 卦例库
+    gua_li = MeiHuaPan.get_gua_li_v3(ben_gua, hu_gua, bian_gua)
+    
+    # v2.0.0 吉凶评分
+    ji_xiong_ping_fen = MeiHuaPan.get_ji_xiong_ping_fen_v3(ti_yong, ben_gua, hu_gua, bian_gua)
     
     result = {
         '起卦方式': qi_gua,
@@ -294,6 +502,9 @@ def meihua_pan(
         '体用': ti_yong,
         '问事类型': question,
         '断语': duan_yu,
+        '外应': wai_ying,
+        '卦例': gua_li,
+        '吉凶评分': ji_xiong_ping_fen,
     }
     
     return result
@@ -329,11 +540,54 @@ def format_output(result: Dict) -> str:
     for duan in result['断语']:
         output.append(f"• {duan}")
     
+    # v2.0.0 吉凶评分
+    if result.get('吉凶评分'):
+        score = result['吉凶评分']
+        if score >= 70:
+            ping_ji = '大吉'
+        elif score >= 55:
+            ping_ji = '吉'
+        elif score >= 45:
+            ping_ji = '平'
+        elif score >= 30:
+            ping_ji = '凶'
+        else:
+            ping_ji = '大凶'
+        output.append("")
+        output.append("【吉凶评分】v2.0.0")
+        output.append(f"• 评分：{score}/100（{ping_ji}）")
+    
+    # v2.0.0 外应断卦
+    if result.get('外应'):
+        wai_ying = result['外应']
+        output.append("")
+        output.append("【外应断卦】v2.0.0")
+        if wai_ying.get('外应类型'):
+            for ying in wai_ying['外应类型']:
+                output.append(f"• {ying}")
+        if wai_ying.get('外应详解'):
+            for xiang in wai_ying['外应详解']:
+                output.append(f"  {xiang}")
+        output.append(f"• 外应吉凶：{wai_ying.get('外应吉凶', '中')}")
+    
+    # v2.0.0 卦例库
+    if result.get('卦例'):
+        gua_li = result['卦例']
+        if gua_li.get('卦例') or gua_li.get('典故') or gua_li.get('启示'):
+            output.append("")
+            output.append("【卦例参考】v2.0.0")
+            if gua_li.get('卦例'):
+                output.append(f"• 卦例：{gua_li['卦例']}")
+            if gua_li.get('典故'):
+                output.append(f"• 典故：{gua_li['典故']}")
+            if gua_li.get('启示'):
+                output.append(f"• 启示：{gua_li['启示']}")
+    
     return "\n".join(output)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='梅花易数排盘工具 v1.0.0')
+    parser = argparse.ArgumentParser(description='梅花易数排盘工具 v2.0.0')
     parser.add_argument('--numbers', '-n', type=str, help='数字起卦 (逗号分隔，至少 2 个数字)')
     parser.add_argument('--date', '-d', type=str, help='时间起卦 (YYYY-MM-DD HH:MM)')
     parser.add_argument('--fangwei', '-f', type=str, help='方位起卦 (东/南/西/北/东南/西南/西北/东北)')

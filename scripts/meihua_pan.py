@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-梅花易数排盘工具 v2.0.0
+梅花易数排盘工具 v3.0.0
 天工长老开发
 
 功能：梅花易数起卦、互卦、变卦、体用分析、自动化断卦
 v2.0.0 新增：外应断卦、卦例库、断语细化、吉凶评分
+v3.0.0 新增：应期推算、卦例记录、多爻动支持、卦气旺衰、问事类型断语
 """
 
 import argparse
 import json
 import random
+import os
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
@@ -63,6 +65,35 @@ LIU_SHI_SI_GUA = {
 # 五行生克
 WUXING_SHENG = {'木': '火', '火': '土', '土': '金', '金': '水', '水': '木'}
 WUXING_KE = {'木': '土', '火': '金', '土': '水', '金': '木', '水': '火'}
+
+# 问事类型
+QUESTION_TYPES = ['财运', '事业', '婚姻', '健康', '考试', '投资', '出行', '诉讼', '失物', '其他']
+
+# 月令旺衰表 v3.0.0
+# 格式：月份：{旺：五行，相：五行，休：五行，囚：五行，死：五行}
+YUE_LING_WANG_SHUAI = {
+    1: {'旺': '木', '相': '火', '休': '水', '囚': '金', '死': '土'},  # 寅月
+    2: {'旺': '木', '相': '火', '休': '水', '囚': '金', '死': '土'},  # 卯月
+    3: {'旺': '土', '相': '金', '休': '火', '囚': '木', '死': '水'},  # 辰月
+    4: {'旺': '火', '相': '土', '休': '木', '囚': '水', '死': '金'},  # 巳月
+    5: {'旺': '火', '相': '土', '休': '木', '囚': '水', '死': '金'},  # 午月
+    6: {'旺': '土', '相': '金', '休': '火', '囚': '木', '死': '水'},  # 未月
+    7: {'旺': '金', '相': '水', '休': '土', '囚': '火', '死': '木'},  # 申月
+    8: {'旺': '金', '相': '水', '休': '土', '囚': '火', '死': '木'},  # 酉月
+    9: {'旺': '土', '相': '金', '休': '火', '囚': '木', '死': '水'},  # 戌月
+    10: {'旺': '水', '相': '木', '休': '金', '囚': '土', '死': '火'}, # 亥月
+    11: {'旺': '水', '相': '木', '休': '金', '囚': '土', '死': '火'}, # 子月
+    12: {'旺': '土', '相': '金', '休': '火', '囚': '木', '死': '水'}, # 丑月
+}
+
+# 五行对应地支
+WUXING_DIZHI = {
+    '木': ['寅', '卯'],
+    '火': ['巳', '午'],
+    '土': ['辰', '戌', '丑', '未'],
+    '金': ['申', '酉'],
+    '水': ['亥', '子'],
+}
 
 
 class MeiHuaPan:
@@ -400,16 +431,193 @@ class MeiHuaPan:
                 score -= 15
         
         return max(0, min(100, score))
+    
+    @classmethod
+    def get_gua_qi_wang_shuai_v3(cls, ti_yong: Dict, month: int) -> Dict:
+        """
+        v3.0.0 卦气旺衰判断
+        
+        参数：
+            ti_yong: 体用信息
+            month: 月份（1-12）
+        
+        返回：
+            旺衰信息
+        """
+        ti_wuxing = ti_yong.get('体卦五行', '金')
+        
+        # 获取月令旺衰
+        wang_shuai = YUE_LING_WANG_SHUAI.get(month, YUE_LING_WANG_SHUAI[1])
+        
+        # 判断体卦五行在月令中的状态
+        if ti_wuxing == wang_shuai['旺']:
+            zhuang_tai = '旺'
+            score = 100
+        elif ti_wuxing == wang_shuai['相']:
+            zhuang_tai = '相'
+            score = 80
+        elif ti_wuxing == wang_shuai['休']:
+            zhuang_tai = '休'
+            score = 60
+        elif ti_wuxing == wang_shuai['囚']:
+            zhuang_tai = '囚'
+            score = 40
+        else:  # 死
+            zhuang_tai = '死'
+            score = 20
+        
+        return {
+            '月令': f"{month}月（{wang_shuai['旺']}旺）",
+            '体卦五行': ti_wuxing,
+            '旺衰状态': zhuang_tai,
+            '卦气评分': score
+        }
+    
+    @classmethod
+    def get_ying_qi_v3(cls, shang_gua: int, xia_gua: int, ti_yong: Dict, month: int) -> Dict:
+        """
+        v3.0.0 应期推算
+        
+        参数：
+            shang_gua: 上卦数
+            xia_gua: 下卦数
+            ti_yong: 体用信息
+            month: 月份
+        
+        返回：
+            应期信息
+        """
+        # 卦数应期
+        gua_shu = shang_gua + xia_gua
+        
+        # 五行应期
+        ti_wuxing = ti_yong.get('体卦五行', '金')
+        wuxing_ying_qi = WUXING_DIZHI.get(ti_wuxing, ['申', '酉'])
+        
+        # 综合判断
+        ying_qi_text = f"{gua_shu}日内或{gua_shu}周内"
+        wuxing_text = f"{ti_wuxing}旺于{'/'.join(wuxing_ying_qi)}日/月"
+        
+        return {
+            '卦数应期': f"{gua_shu}日/{gua_shu}周/{gua_shu}月",
+            '五行应期': wuxing_text,
+            '综合判断': ying_qi_text
+        }
+    
+    @classmethod
+    def get_wen_shi_duan_yu_v3(cls, question: str, ti_yong: Dict) -> List[str]:
+        """
+        v3.0.0 问事类型断语
+        
+        参数：
+            question: 问事类型
+            ti_yong: 体用信息
+        
+        返回：
+            断语列表
+        """
+        duan_yu = []
+        ti_yong_guan_xi = ti_yong.get('体用关系', '比和')
+        
+        # 财运断语
+        if question == '财运':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【财运】财来找我，投资有利，不劳而获")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【财运】努力得财，勤劳致富")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【财运】破财之象，谨慎投资")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【财运】财路受阻，防诈骗")
+            else:
+                duan_yu.append("【财运】财运平稳，宜守成")
+        
+        # 事业断语
+        elif question == '事业':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【事业】贵人提拔，晋升有望")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【事业】主动争取，可成")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【事业】付出多，回报少")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【事业】工作压力大，防小人")
+            else:
+                duan_yu.append("【事业】事业平稳，循序渐进")
+        
+        # 婚姻断语
+        elif question == '婚姻':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【婚姻】对方主动，感情顺利")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【婚姻】需主动追求")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【婚姻】付出多，易受伤")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【婚姻】感情受阻，防第三者")
+            else:
+                duan_yu.append("【婚姻】感情和谐，相互包容")
+        
+        # 健康断语
+        elif question == '健康':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【健康】身体康复快")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【健康】需积极治疗")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【健康】体质虚弱，需调养")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【健康】病情较重，及时就医")
+            else:
+                duan_yu.append("【健康】身体状况良好")
+        
+        # 考试断语
+        elif question == '考试':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【考试】发挥出色，成绩优异")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【考试】努力复习，可过关")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【考试】发挥失常，需准备充分")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【考试】难度较大，需谨慎")
+            else:
+                duan_yu.append("【考试】正常发挥，成绩稳定")
+        
+        # 投资断语
+        elif question == '投资':
+            if ti_yong_guan_xi == '用生体':
+                duan_yu.append("【投资】投资有利，收益可观")
+            elif ti_yong_guan_xi == '体克用':
+                duan_yu.append("【投资】需谨慎分析，可获利")
+            elif ti_yong_guan_xi == '体生用':
+                duan_yu.append("【投资】风险较大，不宜投入")
+            elif ti_yong_guan_xi == '用克体':
+                duan_yu.append("【投资】谨防亏损，观望为宜")
+            else:
+                duan_yu.append("【投资】稳健投资，小利可图")
+        
+        else:
+            # 通用断语
+            if ti_yong['吉凶'] == '大吉':
+                duan_yu.append(f"【综合】大吉，事易成，有贵人相助")
+            elif ti_yong['吉凶'] == '吉':
+                duan_yu.append(f"【综合】吉，事可成")
+            elif ti_yong['吉凶'] == '凶':
+                duan_yu.append(f"【综合】凶，事多阻，需谨慎")
+        
+        return duan_yu
 
 
 def meihua_pan(
     numbers: Optional[str] = None,
     date_str: Optional[str] = None,
     fang_wei: Optional[str] = None,
-    question: str = '通用'
+    question: str = '通用',
+    save: bool = False
 ) -> Dict:
     """
-    梅花易数排盘主函数
+    梅花易数排盘主函数 v3.0.0
     """
     # 起卦方式
     if numbers:
@@ -482,6 +690,10 @@ def meihua_pan(
     # 断语（v1.0.0）
     duan_yu = MeiHuaPan.get_duan_yu(ti_yong, ben_gua, hu_gua, bian_gua)
     
+    # v3.0.0 问事类型断语
+    wen_shi_duan_yu = MeiHuaPan.get_wen_shi_duan_yu_v3(question, ti_yong)
+    duan_yu.extend(wen_shi_duan_yu)
+    
     # v2.0.0 外应断卦
     wai_ying = MeiHuaPan.get_wai_ying_v3(ben_gua, ti_yong)
     
@@ -490,6 +702,13 @@ def meihua_pan(
     
     # v2.0.0 吉凶评分
     ji_xiong_ping_fen = MeiHuaPan.get_ji_xiong_ping_fen_v3(ti_yong, ben_gua, hu_gua, bian_gua)
+    
+    # v3.0.0 卦气旺衰
+    month = datetime.now().month if not date_str else datetime.strptime(date_str, "%Y-%m-%d %H:%M").month
+    gua_qi = MeiHuaPan.get_gua_qi_wang_shuai_v3(ti_yong, month)
+    
+    # v3.0.0 应期推算
+    ying_qi = MeiHuaPan.get_ying_qi_v3(shang_gua, xia_gua, ti_yong, month)
     
     result = {
         '起卦方式': qi_gua,
@@ -505,17 +724,70 @@ def meihua_pan(
         '外应': wai_ying,
         '卦例': gua_li,
         '吉凶评分': ji_xiong_ping_fen,
+        '卦气旺衰': gua_qi,
+        '应期推算': ying_qi,
+        '起卦时间': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    
+    # v3.0.0 保存卦例
+    if save:
+        save_gua_li(result)
+        result['卦例保存'] = '已保存'
     
     return result
 
 
+def save_gua_li(result: Dict) -> str:
+    """
+    v3.0.0 保存卦例到本地
+    """
+    # 创建卦例目录
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    guali_dir = os.path.join(base_dir, 'guali')
+    os.makedirs(guali_dir, exist_ok=True)
+    
+    # 生成文件名
+    timestamp = result.get('起卦时间', datetime.now().strftime("%Y-%m-%d %H:%M:%S")).replace(':', '').replace(' ', '_')
+    question = result.get('问事类型', '通用')
+    filename = f"{timestamp}_{question}.json"
+    filepath = os.path.join(guali_dir, filename)
+    
+    # 保存卦例
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    
+    # 更新索引
+    index_file = os.path.join(guali_dir, 'index.json')
+    if os.path.exists(index_file):
+        with open(index_file, 'r', encoding='utf-8') as f:
+            index = json.load(f)
+    else:
+        index = []
+    
+    index.append({
+        'filename': filename,
+        'timestamp': result.get('起卦时间', ''),
+        'question': question,
+        'ben_gua': result.get('本卦', ''),
+        'bian_gua': result.get('变卦', ''),
+        'ji_xiong': result.get('体用', {}).get('吉凶', ''),
+        'score': result.get('吉凶评分', 0)
+    })
+    
+    with open(index_file, 'w', encoding='utf-8') as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+    
+    return filepath
+
+
 def format_output(result: Dict) -> str:
-    """格式化输出"""
+    """格式化输出 v3.0.0"""
     output = []
     
-    output.append("【梅花易数排盘】")
+    output.append("【梅花易数排盘】v3.0.0")
     output.append(f"• 起卦方式：{result['起卦方式']}")
+    output.append(f"• 问事类型：{result.get('问事类型', '通用')}")
+    output.append(f"• 起卦时间：{result.get('起卦时间', '')}")
     output.append("")
     output.append("【本卦】")
     output.append(f"• 卦名：{result['本卦']}")
@@ -535,10 +807,30 @@ def format_output(result: Dict) -> str:
     output.append(f"• 用卦：{ti_yong['用卦']}（{ti_yong['用卦五行']}）")
     output.append(f"• 体用关系：{ti_yong['体用关系']}")
     output.append(f"• 吉凶：{ti_yong['吉凶']}")
+    
+    # v3.0.0 卦气旺衰
+    if result.get('卦气旺衰'):
+        gua_qi = result['卦气旺衰']
+        output.append("")
+        output.append("【卦气旺衰】v3.0.0")
+        output.append(f"• 月令：{gua_qi.get('月令', '')}")
+        output.append(f"• 体卦五行：{gua_qi.get('体卦五行', '')}")
+        output.append(f"• 旺衰状态：{gua_qi.get('旺衰状态', '')}")
+        output.append(f"• 卦气评分：{gua_qi.get('卦气评分', 0)}/100")
+    
     output.append("")
     output.append("【断卦分析】")
     for duan in result['断语']:
         output.append(f"• {duan}")
+    
+    # v3.0.0 应期推算
+    if result.get('应期推算'):
+        ying_qi = result['应期推算']
+        output.append("")
+        output.append("【应期推算】v3.0.0")
+        output.append(f"• 卦数应期：{ying_qi.get('卦数应期', '')}")
+        output.append(f"• 五行应期：{ying_qi.get('五行应期', '')}")
+        output.append(f"• 综合判断：{ying_qi.get('综合判断', '')}")
     
     # v2.0.0 吉凶评分
     if result.get('吉凶评分'):
@@ -583,25 +875,44 @@ def format_output(result: Dict) -> str:
             if gua_li.get('启示'):
                 output.append(f"• 启示：{gua_li['启示']}")
     
+    # v3.0.0 卦例保存提示
+    if result.get('卦例保存'):
+        output.append("")
+        output.append(f"🏮 卦例已保存至 ~/.openclaw/skills/meihua-yishu-skill/guali/")
+    
     return "\n".join(output)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='梅花易数排盘工具 v2.0.0')
+    parser = argparse.ArgumentParser(description='梅花易数排盘工具 v3.0.0')
     parser.add_argument('--numbers', '-n', type=str, help='数字起卦 (逗号分隔，至少 2 个数字)')
     parser.add_argument('--date', '-d', type=str, help='时间起卦 (YYYY-MM-DD HH:MM)')
     parser.add_argument('--fangwei', '-f', type=str, help='方位起卦 (东/南/西/北/东南/西南/西北/东北)')
     parser.add_argument('--question', '-q', type=str, default='通用', help='问事类型')
     parser.add_argument('--json', '-j', action='store_true', help='输出 JSON 格式')
     parser.add_argument('--random', '-r', action='store_true', help='随机起卦')
+    parser.add_argument('--save', '-s', action='store_true', help='保存卦例到本地库')
+    parser.add_argument('--history', '-H', action='store_true', help='查看历史卦例')
+    parser.add_argument('--search', '-S', type=str, help='搜索卦例')
+    parser.add_argument('--limit', '-l', type=int, default=10, help='历史/搜索结果数量限制')
     
     args = parser.parse_args()
     
     try:
+        # v3.0.0 查看历史卦例
+        if args.history:
+            print_history(args.limit)
+            return 0
+        
+        # v3.0.0 搜索卦例
+        if args.search:
+            print_search(args.search, args.limit)
+            return 0
+        
         if args.random:
-            result = meihua_pan()
+            result = meihua_pan(save=args.save)
         else:
-            result = meihua_pan(args.numbers, args.date, args.fangwei, args.question)
+            result = meihua_pan(args.numbers, args.date, args.fangwei, args.question, save=args.save)
         
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -615,6 +926,59 @@ def main():
         return 1
     
     return 0
+
+
+def print_history(limit: int = 10):
+    """v3.0.0 打印历史卦例"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    guali_dir = os.path.join(base_dir, 'guali')
+    index_file = os.path.join(guali_dir, 'index.json')
+    
+    if not os.path.exists(index_file):
+        print("暂无历史卦例")
+        return
+    
+    with open(index_file, 'r', encoding='utf-8') as f:
+        index = json.load(f)
+    
+    if not index:
+        print("暂无历史卦例")
+        return
+    
+    # 按时间倒序
+    index = sorted(index, key=lambda x: x.get('timestamp', ''), reverse=True)[:limit]
+    
+    print(f"【历史卦例】最近 {len(index)} 条\n")
+    for i, item in enumerate(index, 1):
+        print(f"{i}. {item.get('timestamp', '')} - {item.get('ben_gua', '')} → {item.get('bian_gua', '')} "
+              f"（{item.get('ji_xiong', '')}，{item.get('score', 0)}分）- {item.get('question', '')}")
+
+
+def print_search(keyword: str, limit: int = 10):
+    """v3.0.0 搜索卦例"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    guali_dir = os.path.join(base_dir, 'guali')
+    index_file = os.path.join(guali_dir, 'index.json')
+    
+    if not os.path.exists(index_file):
+        print("暂无历史卦例")
+        return
+    
+    with open(index_file, 'r', encoding='utf-8') as f:
+        index = json.load(f)
+    
+    # 搜索
+    results = [item for item in index if keyword.lower() in item.get('question', '').lower()]
+    results = sorted(results, key=lambda x: x.get('timestamp', ''), reverse=True)[:limit]
+    
+    if not results:
+        print(f"未找到与'{keyword}'相关的卦例")
+        return
+    
+    print(f"【卦例搜索】'{keyword}' - 找到 {len(results)} 条\n")
+    for i, item in enumerate(results, 1):
+        print(f"{i}. {item.get('timestamp', '')} - {item.get('ben_gua', '')} → {item.get('bian_gua', '')} "
+              f"（{item.get('ji_xiong', '')}，{item.get('score', 0)}分）")
 
 
 if __name__ == '__main__':

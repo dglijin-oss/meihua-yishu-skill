@@ -1010,3 +1010,40 @@ MEIHUA_DUAN_YU_V2 = {
         '变卦': '远期（7 天以上/月以上）',
     },
 }
+
+# ============== v2.2.0 综合评分系统 ==============
+
+def calculate_meihua_score(result: Dict) -> int:
+    """计算梅花易数综合评分 (0-100)"""
+    score = 50  # 基础分
+    
+    # 体用关系 (0-40 分)
+    ti_yong = result.get('体用分析', {})
+    relation = ti_yong.get('关系', '')
+    
+    if relation == '用生体':
+        score += 40  # 大吉
+    elif relation == '体用比和':
+        score += 30  # 吉
+    elif relation == '体克用':
+        score += 20  # 小吉
+    elif relation == '体生用':
+        score += 10  # 泄气
+    elif relation == '用克体':
+        score -= 20  # 凶
+    
+    # 卦象吉凶 (0-20 分)
+    ben_gua = result.get('本卦', {}).get('卦名', '')
+    ji_gua = ['乾', '坤', '泰', '否', '既济', '未济']
+    if ben_gua in ['泰', '既济', '乾']:
+        score += 20
+    elif ben_gua in ['否', '未济', '坤']:
+        score += 10
+    
+    # 互卦变卦 (0-20 分)
+    if result.get('变卦'):
+        score += 10  # 有变卦，信息完整
+    if result.get('互卦'):
+        score += 10  # 有互卦，过程清晰
+    
+    return max(0, min(score, 100))
